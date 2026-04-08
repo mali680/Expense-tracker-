@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Personal Expense Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-slate-100 text-slate-900">
+    <div id="root"></div>
+    <script type="text/babel" data-presets="env,react">
+      const { useEffect, useMemo, useState } = React;
+
+      const CATEGORIES = ["food", "transport", "entertainment", "other"];
+
+      const CATEGORY_COLORS = {
+        food: "bg-emerald-500",
+        transport: "bg-blue-500",
+        entertainment: "bg-violet-500",
+        other: "bg-amber-500",
+      };
+      const STORAGE_KEY = "expense-tracker-expenses-v1";
+
+      function money(amount) {
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+        }).format(amount);
+      }
+
+      function makeId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        return `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      }
+
+      function App() {
+        const [name, setName] = useState("");
+        const [amount, setAmount] = useState("");
+        const [category, setCategory] = useState("food");
+        const [expenses, setExpenses] = useState(() => {
+          try {
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            if (!raw) {
+              return [];
+            }
+
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) {
+              return [];
+            }
+
+            return parsed.filter(
+              (item) =>
+                item &&
+                typeof item.id === "string" &&
+                typeof item.name === "string" &&
+                Number.isFinite(item.amount) &&
+                CATEGORIES.includes(item.category)
+            );
+          } catch {
+            return [];
+          }
+        });
+        const [error, setError] = useState("");
+
+        useEffect(() => {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+        }, [expenses]);
+
+        const totalsByCategory = useMemo(() => {
+          return expenses.reduce(
+            (acc, expense) => {
+              acc[expense.category] += expense.amount;
+              return acc;
+            },
+            { food: 0, transport: 0, entertainment: 0, other: 0 }
+          );
+        }, [expenses]);
+
+        const totalSpent = useMemo(
+          () => expenses.reduce((sum, expense) => sum + expense.amount, 0),
+          [expenses]
+        );
+
+        const maxCategoryTotal = useMemo(
+          () => Math.max(0, ...Object.values(totalsByCategory)),
+          [totalsByCategory]
+        );
+
+        function handleSubmit(event) {
+          event.preventDefault();
+
+          const trimmedName = name.trim();
+          const parsedAmount = Number.parseFloat(amount);
+
+          if (!trimmedName) {
+            setError("Please enter an expense name.");
+            return;
+          }
+
+          if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            setError("Please enter a valid amount greater than 0.");
+            return;
+          }
+
+          setExpenses((current) => [
+            {
+              id: makeId(),
+              name: trimmedName,
+              amount: parsedAmount,
+              category,
+            },
+            ...current,
+          ]);
+          setName("");
+          setAmount("");
+          setCategory("food");
+          setError("");
+        }
+
+        return (
+          <main className="mx-auto w-full max-w-5xl p-6 md:p-10">
+            <header className="mb-8">
+              <h1 className="text-3xl font-bold">Personal Expense Tracker</h1>
+              <p className="mt-2 text-slate-600">
+                Track expenses, monitor your total, and visualize category
+                spending.
+              </p>
+            </header>
+
+            <section className="grid gap-6 md:grid-cols-2">
+              <form
+                onSubmit={handleSubmit}
+                className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+              >
+                <h2 className="mb-4 text-xl font-semibold">Add Expense</h2>
+
+                <label className="mb-3 block">
+                  <span className="mb-1 block text-sm font-medium text-slate-700">
+                    Name
+                  </span>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                    type="text"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Lunch, Bus ticket..."
+                  />
+                </label>
+
+                <label className="mb-3 block">
+                  <span className="mb-1 block text-sm font-medium text-slate-700">
+                    Amount
+                  </span>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                    placeholder="0.00"
+                  />
+                </label>
+
+                <label className="mb-4 block">
+                  <span className="mb-1 block text-sm font-medium text-slate-700">
+                    Category
+                  </span>
+                  <select
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value)}
+                  >
+                    {CATEGORIES.map((item) => (
+                      <option key={item} value={item}>
+                        {item[0].toUpperCase() + item.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {error ? (
+                  <p className="mb-3 text-sm text-red-600">{error}</p>
+                ) : null}
+
+                <button
+                  className="w-full rounded-lg bg-slate-900 px-4 py-2 font-medium text-white transition hover:bg-slate-700"
+                  type="submit"
+                >
+                  Add Expense
+                </button>
+              </form>
+
+              <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <h2 className="text-xl font-semibold">Overview</h2>
+                <p className="mt-2 text-sm text-slate-600">Running total</p>
+                <p className="mt-1 text-3xl font-bold">{money(totalSpent)}</p>
+
+                <div className="mt-6 space-y-3">
+                  {CATEGORIES.map((item) => {
+                    const value = totalsByCategory[item];
+                    const width =
+                      maxCategoryTotal > 0 ? (value / maxCategoryTotal) * 100 : 0;
+
+                    return (
+                      <div key={item}>
+                        <div className="mb-1 flex items-center justify-between text-sm">
+                          <span className="font-medium capitalize">{item}</span>
+                          <span className="text-slate-600">{money(value)}</span>
+                        </div>
+                        <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className={`h-full rounded-full ${CATEGORY_COLORS[item]}`}
+                            style={{ width: `${width}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-6 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <h2 className="mb-3 text-xl font-semibold">Expenses</h2>
+              {expenses.length === 0 ? (
+                <p className="text-slate-600">No expenses yet. Add your first one.</p>
+              ) : (
+                <ul className="divide-y divide-slate-200">
+                  {expenses.map((expense) => (
+                    <li
+                      key={expense.id}
+                      className="flex items-center justify-between py-3 text-sm md:text-base"
+                    >
+                      <div>
+                        <p className="font-medium">{expense.name}</p>
+                        <p className="capitalize text-slate-600">{expense.category}</p>
+                      </div>
+                      <p className="font-semibold">{money(expense.amount)}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </main>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
